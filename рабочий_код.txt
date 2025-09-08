@@ -1,0 +1,607 @@
+// src/components/MatchList.tsx
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+// Определение интерфейса для объекта матча
+interface Match {
+  id: number;
+  date: string;
+  home: string;
+  away: string;
+  league: string;
+  one_o: number;
+  one_e: number;
+  x_o: number;
+  x_e: number;
+  two_o: number;
+  two_e: number;
+  bts_o: number;
+  bts_e: number;
+  bts_no_o: number;
+  bts_no_e: number;
+  over_o: number;
+  over_e: number;
+  under_o: number;
+  under_e: number;
+  first_half: string | null;
+  match: string | null;
+  goals: string | null;
+  link: string | null;
+  notes: string | null;
+}
+
+const MatchList: React.FC = () => {
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Состояния для фильтров
+  const [filterLeague, setFilterLeague] = useState<string>('');
+  const [filterMinOneO, setFilterMinOneO] = useState<string>('');
+  const [filterMaxOneO, setFilterMaxOneO] = useState<string>('');
+  // Добавьте состояния для других фильтров по коэффициентам, если нужно
+
+  useEffect(() => {
+    fetchMatches();
+  }, []); // Изначальная загрузка при монтировании
+
+  const fetchMatches = async () => {
+    try {
+      setLoading(true);
+      setError(null); // Сбрасываем предыдущие ошибки
+
+      // Формируем параметры запроса
+      const params = new URLSearchParams();
+      if (filterLeague) {
+        params.append('league', filterLeague);
+      }
+      if (filterMinOneO) {
+        params.append('min_one_o', filterMinOneO);
+      }
+      if (filterMaxOneO) {
+        params.append('max_one_o', filterMaxOneO);
+      }
+      // Добавьте другие параметры фильтрации здесь
+
+      const response = await axios.get<Match[]>(`http://localhost:8000/api/matches/?${params.toString()}`);
+      setMatches(response.data);
+    } catch (err) {
+      setError('Не удалось загрузить данные матчей. Пожалуйста, попробуйте позже.');
+      console.error('Ошибка при загрузке матчей:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    fetchMatches(); // Повторно загружаем матчи с учетом текущих фильтров
+  };
+
+  if (loading) {
+    return <div>Загрузка матчей...</div>;
+  }
+
+  if (error) {
+    return <div style={{ color: 'red' }}>{error}</div>;
+  }
+
+  // Общий стиль для ячеек таблицы (td)
+  const cellStyle: React.CSSProperties = {
+    padding: '4px 6px',
+    border: '1px solid #444',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+  };
+
+  // Определяем стиль для вертикального текста заголовков
+  const verticalHeaderStyle: React.CSSProperties = {
+    writingMode: 'vertical-lr',
+    textOrientation: 'mixed',
+    transform: 'rotate(180deg)',
+    whiteSpace: 'nowrap',
+    padding: '4px 6px',
+    textAlign: 'center',
+    verticalAlign: 'middle',
+    minWidth: '30px',
+    height: '100px',
+    boxSizing: 'border-box',
+    border: '1px solid #444',
+  };
+
+  // Стиль для фиксированной ширины колонок с коэффициентами и счетом
+  const fixedWidthColumnStyle: React.CSSProperties = {
+    minWidth: '50px',
+  };
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <h2>Список Матчей</h2>
+
+      {/* Блок фильтрации */}
+      <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '5px' }}>
+        <h3>Фильтры</h3>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label htmlFor="leagueFilter">Лига:</label>
+            <input
+              id="leagueFilter"
+              type="text"
+              value={filterLeague}
+              onChange={(e) => setFilterLeague(e.target.value)}
+              placeholder="Название лиги"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px' }}
+            />
+          </div>
+          <div>
+            <label htmlFor="minOneO">Мин. 1(o):</label>
+            <input
+              id="minOneO"
+              type="number"
+              step="0.01"
+              value={filterMinOneO}
+              onChange={(e) => setFilterMinOneO(e.target.value)}
+              placeholder="Например, 1.5"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px', width: '90px' }}
+            />
+          </div>
+          <div>
+            <label htmlFor="maxOneO">Макс. 1(o):</label>
+            <input
+              id="maxOneO"
+              type="number"
+              step="0.01"
+              value={filterMaxOneO}
+              onChange={(e) => setFilterMaxOneO(e.target.value)}
+              placeholder="Например, 3.0"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px', width: '90px' }}
+            />
+          </div>
+          {/* Добавьте другие поля фильтрации здесь */}
+          <button 
+            onClick={handleApplyFilters} 
+            style={{ padding: '8px 15px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          >
+            Применить фильтры
+          </button>
+        </div>
+      </div>
+
+      {matches.length === 0 ? (
+        <p>Матчи не найдены или у вас ограниченный доступ.</p>
+      ) : (
+        <table style={{ 
+            borderCollapse: 'collapse', 
+            width: '100%', 
+            fontSize: '0.85em',
+            margin: '0 auto',
+            maxWidth: 'calc(100vw - 40px)'
+        }}>
+          <thead>
+            <tr>
+              <th style={{ ...verticalHeaderStyle, minWidth: '120px' }}>Дата</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '90px' }}>Дома</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '90px' }}>В гостях</th>
+              
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS_no(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS_no(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Over(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Over(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Under(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Under(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1H</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Матч</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '60px' }}>Голы</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '150px' }}>Лига</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '60px' }}>Ссылка</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map(match => {
+              const matchDate = new Date(match.date);
+              const formattedDate = matchDate.toLocaleDateString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit' });
+              const formattedTime = matchDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+              return (
+                <tr key={match.id}>
+                  <td style={cellStyle}>{`${formattedDate} ${formattedTime}`}</td>
+                  <td style={cellStyle}>{match.home}</td>
+                  <td style={cellStyle}>{match.away}</td>
+                  <td style={cellStyle}>{match.one_o}</td>
+                  <td style={cellStyle}>{match.one_e}</td>
+                  <td style={cellStyle}>{match.x_o}</td>
+                  <td style={cellStyle}>{match.x_e}</td>
+                  <td style={cellStyle}>{match.two_o}</td>
+                  <td style={cellStyle}>{match.two_e}</td>
+                  <td style={cellStyle}>{match.bts_o}</td>
+                  <td style={cellStyle}>{match.bts_e}</td>
+                  <td style={cellStyle}>{match.bts_no_o}</td>
+                  <td style={cellStyle}>{match.bts_no_e}</td>
+                  <td style={cellStyle}>{match.over_o}</td>
+                  <td style={cellStyle}>{match.over_e}</td>
+                  <td style={cellStyle}>{match.under_o}</td>
+                  <td style={cellStyle}>{match.under_e}</td>
+                  <td style={cellStyle}>{match.first_half}</td>
+                  <td style={cellStyle}>{match.match}</td>
+                  <td style={cellStyle}>{match.goals}</td>
+                  <td style={cellStyle}>{match.league}</td>
+                  <td style={cellStyle}><a href={match.link || '#'} target="_blank" rel="noopener noreferrer">Ссылка</a></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+export default MatchList;
+
+======================================================================================
+
+// src/components/MatchList.tsx
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+
+// Определение интерфейса для объекта матча
+interface Match {
+  id: number;
+  date: string;
+  home: string;
+  away: string;
+  league: string;
+  one_o: number;
+  one_e: number;
+  x_o: number;
+  x_e: number;
+  two_o: number;
+  two_e: number;
+  bts_o: number;
+  bts_e: number;
+  bts_no_o: number;
+  bts_no_e: number;
+  over_o: number;
+  over_e: number;
+  under_o: number;
+  under_e: number;
+  first_half: string | null;
+  match: string | null;
+  goals: string | null;
+  link: string | null;
+  notes: string | null;
+}
+
+// Интерфейс для статистики
+interface Statistics {
+  total_matches: number;
+  home_wins_count: number;
+  draws_count: number;
+  away_wins_count: number;
+  bts_yes_count: number;
+  bts_no_count: number;
+  over_count: number;
+  under_count: number;
+  roi_home: number;
+  roi_draw: number;
+  roi_away: number;
+  roi_bts_yes: number;
+  roi_bts_no: number;
+  roi_over: number;
+  roi_under: number;
+}
+
+const MatchList: React.FC = () => {
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+
+  // Состояния для фильтров
+  const [filterLeague, setFilterLeague] = useState<string>('');
+  const [filterMinOneO, setFilterMinOneO] = useState<string>('');
+  const [filterMaxOneO, setFilterMaxOneO] = useState<string>('');
+
+  const fetchMatches = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (filterLeague) {
+        params.append('league', filterLeague);
+      }
+      if (filterMinOneO) {
+        params.append('min_one_o', filterMinOneO);
+      }
+      if (filterMaxOneO) {
+        params.append('max_one_o', filterMaxOneO);
+      }
+
+      const matchesResponse = await axios.get<Match[]>(`http://localhost:8000/api/matches/?${params.toString()}`);
+      setMatches(matchesResponse.data);
+
+      const statsResponse = await axios.get<Statistics>(`http://localhost:8000/api/matches/statistics/?${params.toString()}`);
+      setStatistics(statsResponse.data);
+
+    } catch (err) {
+      setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
+      console.error('Ошибка при загрузке данных:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterLeague, filterMinOneO, filterMaxOneO]);
+
+  useEffect(() => {
+    fetchMatches();
+  }, [fetchMatches]);
+
+  const handleApplyFilters = () => {
+    fetchMatches();
+  };
+
+  const formatRoi = (roi: number | null) => {
+    if (roi === null || isNaN(roi)) {
+      return '';
+    }
+    const sign = roi >= 0 ? '+' : '';
+    const color = roi >= 0 ? 'green' : 'red';
+    return <span style={{ color: color }}>{`${sign}${roi.toFixed(2)}% ROI`}</span>;
+  };
+
+  if (loading) {
+    return <div>Загрузка данных...</div>;
+  }
+
+  if (error) {
+    return <div style={{ color: 'red' }}>{error}</div>;
+  }
+
+  // Общий стиль для ячеек таблицы (td)
+  const cellStyle: React.CSSProperties = {
+    padding: '4px 6px',
+    border: '1px solid #444',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+  };
+
+  // Определяем стиль для вертикального текста заголовков
+  const verticalHeaderStyle: React.CSSProperties = {
+    writingMode: 'vertical-lr',
+    textOrientation: 'mixed',
+    transform: 'rotate(180deg)',
+    whiteSpace: 'nowrap',
+    padding: '4px 6px',
+    textAlign: 'center',
+    verticalAlign: 'middle',
+    minWidth: '30px',
+    height: '100px',
+    boxSizing: 'border-box',
+    border: '1px solid #444',
+  };
+
+  // Стиль для фиксированной ширины колонок с коэффициентами и счетом
+  const fixedWidthColumnStyle: React.CSSProperties = {
+    minWidth: '50px',
+  };
+
+  // Стиль для карточек статистики
+  const cardContainerStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', // <--- Изменено: уменьшен minmax
+    gap: '10px', // <--- Изменено: уменьшен зазор
+    marginBottom: '30px',
+    padding: '10px', // <--- Изменено: уменьшен padding
+    backgroundColor: '#333',
+    borderRadius: '8px',
+    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#444',
+    padding: '10px', // <--- Изменено: уменьшен padding
+    borderRadius: '8px',
+    textAlign: 'center',
+    color: 'white',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    minHeight: '80px', // <--- Изменено: уменьшена минимальная высота
+  };
+
+  const cardCountStyle: React.CSSProperties = {
+    fontSize: '1.5em', // <--- Изменено: уменьшен шрифт
+    fontWeight: 'bold',
+    marginBottom: '3px', // <--- Изменено: уменьшен отступ
+  };
+
+  const cardTitleStyle: React.CSSProperties = {
+    fontSize: '0.8em', // <--- Изменено: уменьшен шрифт
+    color: '#bbb',
+    marginBottom: '3px', // <--- Изменено: уменьшен отступ
+  };
+
+  const cardRoiStyle: React.CSSProperties = {
+    fontSize: '0.7em', // <--- Изменено: уменьшен шрифт
+    fontWeight: 'bold',
+  };
+
+
+  return (
+    <div style={{ overflowX: 'auto', padding: '20px' }}>
+      {statistics && (
+        <div style={cardContainerStyle}>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.total_matches}</div>
+            <div style={cardTitleStyle}>Кол-во матчей</div>
+            <div style={cardRoiStyle}></div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.home_wins_count}</div>
+            <div style={cardTitleStyle}>П1</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_home)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.draws_count}</div>
+            <div style={cardTitleStyle}>Ничья</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_draw)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.away_wins_count}</div>
+            <div style={cardTitleStyle}>П2</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_away)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.bts_yes_count}</div>
+            <div style={cardTitleStyle}>ОЗ-ДА</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_bts_yes)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.bts_no_count}</div>
+            <div style={cardTitleStyle}>ОЗ-НЕТ</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_bts_no)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.over_count}</div>
+            <div style={cardTitleStyle}>ТБ</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_over)}</div>
+          </div>
+          <div style={cardStyle}>
+            <div style={cardCountStyle}>{statistics.under_count}</div>
+            <div style={cardTitleStyle}>ТМ</div>
+            <div style={cardRoiStyle}>{formatRoi(statistics.roi_under)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Блок фильтрации */}
+      <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '5px' }}>
+        <h3>Фильтры</h3>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div>
+            <label htmlFor="leagueFilter">Лига:</label>
+            <input
+              id="leagueFilter"
+              type="text"
+              value={filterLeague}
+              onChange={(e) => setFilterLeague(e.target.value)}
+              placeholder="Название лиги"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px' }}
+            />
+          </div>
+          <div>
+            <label htmlFor="minOneO">Мин. 1(o):</label>
+            <input
+              id="minOneO"
+              type="number"
+              step="0.01"
+              value={filterMinOneO}
+              onChange={(e) => setFilterMinOneO(e.target.value)}
+              placeholder="Например, 1.5"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px', width: '90px' }}
+            />
+          </div>
+          <div>
+            <label htmlFor="maxOneO">Макс. 1(o):</label>
+            <input
+              id="maxOneO"
+              type="number"
+              step="0.01"
+              value={filterMaxOneO}
+              onChange={(e) => setFilterMaxOneO(e.target.value)}
+              placeholder="Например, 3.0"
+              style={{ padding: '5px', border: '1px solid #ddd', borderRadius: '3px', width: '90px' }}
+            />
+          </div>
+          <button 
+            onClick={handleApplyFilters} 
+            style={{ padding: '8px 15px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          >
+            Применить фильтры
+          </button>
+        </div>
+      </div>
+
+      {matches.length === 0 ? (
+        <p>Матчи не найдены или у вас ограниченный доступ.</p>
+      ) : (
+        <table style={{ 
+            borderCollapse: 'collapse', 
+            width: '100%', 
+            fontSize: '0.85em',
+            margin: '0 auto',
+            maxWidth: 'calc(100vw - 40px)'
+        }}>
+          <thead>
+            <tr>
+              <th style={{ ...verticalHeaderStyle, minWidth: '120px' }}>Дата</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '90px' }}>Дома</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '90px' }}>В гостях</th>
+              
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS(o)</th>
+              <th style={{ ...fixedWidthColumnStyle, ...fixedWidthColumnStyle }}>BTS(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS_no(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS_no(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Over(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Over(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Under(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Under(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1H</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>Матч</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '60px' }}>Голы</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '150px' }}>Лига</th>
+              <th style={{ ...verticalHeaderStyle, minWidth: '60px' }}>Ссылка</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map(match => {
+              const matchDate = new Date(match.date);
+              const formattedDate = matchDate.toLocaleDateString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit' });
+              const formattedTime = matchDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+              return (
+                <tr key={match.id}>
+                  <td style={cellStyle}>{`${formattedDate} ${formattedTime}`}</td>
+                  <td style={cellStyle}>{match.home}</td>
+                  <td style={cellStyle}>{match.away}</td>
+                  <td style={cellStyle}>{match.one_o}</td>
+                  <td style={cellStyle}>{match.one_e}</td>
+                  <td style={cellStyle}>{match.x_o}</td>
+                  <td style={cellStyle}>{match.x_e}</td>
+                  <td style={cellStyle}>{match.two_o}</td>
+                  <td style={cellStyle}>{match.two_e}</td>
+                  <td style={cellStyle}>{match.bts_o}</td>
+                  <td style={cellStyle}>{match.bts_e}</td>
+                  <td style={cellStyle}>{match.bts_no_o}</td>
+                  <td style={cellStyle}>{match.bts_no_e}</td>
+                  <td style={cellStyle}>{match.over_o}</td>
+                  <td style={cellStyle}>{match.over_e}</td>
+                  <td style={cellStyle}>{match.under_o}</td>
+                  <td style={cellStyle}>{match.under_e}</td>
+                  <td style={cellStyle}>{match.first_half}</td>
+                  <td style={cellStyle}>{match.match}</td>
+                  <td style={cellStyle}>{match.goals}</td>
+                  <td style={cellStyle}>{match.league}</td>
+                  <td style={cellStyle}><a href={match.link || '#'} target="_blank" rel="noopener noreferrer">Ссылка</a></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
+export default MatchList;

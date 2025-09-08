@@ -1,0 +1,1473 @@
+// MatchList.tsx
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import axios from 'axios';
+import {
+  cellStyle,
+  cellStyle_2,
+  verticalHeaderStyle,
+  fixedWidthColumnStyle,
+  cardContainerStyle,
+  cardStyle,
+  cardCountStyle,
+  cardTitleStyle,
+  cardRoiStyle,
+  topBlockStyle,
+  searchResultsStyle,
+  searchResultItemStyle,
+  tableStyle,
+  filtersContainerStyle,
+  filtersRowStyle,
+  filterItemStyle,
+  labelStyle,
+  checkboxLabelStyle,
+  selectStyle,
+  inputStyle,
+  resetButtonStyle,
+  stickyHeaderRowStyle,
+  tableContainerStyle
+} from './MatchList.styles';
+
+interface League {
+  id: string;
+  name: string;
+}
+
+interface Match {
+  id: number;
+  date: string;
+  home: string;
+  away: string;
+  league: string;
+  league_id: string;
+  one_o: number;
+  one_e: number;
+  x_o: number;
+  x_e: number;
+  two_o: number;
+  two_e: number;
+  bts_o: number;
+  bts_e: number;
+  bts_no_o: number;
+  bts_no_e: number;
+  over_o: number;
+  over_e: number;
+  under_o: number;
+  under_e: number;
+  first_half: string | null;
+  match: string | null;
+  goals: string | null;
+  link: string | null;
+  notes: string | null;
+}
+
+interface Statistics {
+  total_matches: number;
+  home_wins_count: number;
+  draws_count: number;
+  away_wins_count: number;
+  bts_yes_count: number;
+  bts_no_count: number;
+  over_count: number;
+  under_count: number;
+  roi_home: number;
+  roi_draw: number;
+  roi_away: number;
+  roi_bts_yes: number;
+  roi_bts_no: number;
+  roi_over: number;
+  roi_under: number;
+}
+
+const MatchList: React.FC = () => {
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
+  const [showHome, setShowHome] = useState<boolean>(false);
+  const [showAway, setShowAway] = useState<boolean>(false);
+  const [selectedOneOs, setSelectedOneOs] = useState<string[]>([]);
+  const [selectedXOs, setSelectedXOs] = useState<string[]>([]);
+  const [selectedTwoOs, setSelectedTwoOs] = useState<string[]>([]);
+  const [selectedBtsOs, setSelectedBtsOs] = useState<string[]>([]);
+  const [selectedBtsNoOs, setSelectedBtsNoOs] = useState<string[]>([]);
+  const [selectedOverOs, setSelectedOverOs] = useState<string[]>([]);
+  const [selectedUnderOs, setSelectedUnderOs] = useState<string[]>([]);
+  const [selectedFirstHalfs, setSelectedFirstHalfs] = useState<string[]>([]);
+  const [selectedMatches, setSelectedMatches] = useState<string[]>([]);
+  const [selectedOneEs, setSelectedOneEs] = useState<string[]>([]);
+  const [selectedXEs, setSelectedXEs] = useState<string[]>([]);
+  const [selectedTwoEs, setSelectedTwoEs] = useState<string[]>([]);
+  const [selectedBtsEs, setSelectedBtsEs] = useState<string[]>([]);
+  const [selectedBtsNoEs, setSelectedBtsNoEs] = useState<string[]>([]);
+  const [selectedOverEs, setSelectedOverEs] = useState<string[]>([]);
+  const [selectedUnderEs, setSelectedUnderEs] = useState<string[]>([]);
+  const [selectedBtsResult, setSelectedBtsResult] = useState<string[]>([]);
+  const [selectedTotalGoals, setSelectedTotalGoals] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [uniqueLeagues, setUniqueLeagues] = useState<League[]>([]);
+  const [uniqueOneOs, setUniqueOneOs] = useState<string[]>([]);
+  const [uniqueXOs, setUniqueXOs] = useState<string[]>([]);
+  const [uniqueTwoOs, setUniqueTwoOs] = useState<string[]>([]);
+  const [uniqueBtsOs, setUniqueBtsOs] = useState<string[]>([]);
+  const [uniqueBtsNoOs, setUniqueBtsNoOs] = useState<string[]>([]);
+  const [uniqueOverOs, setUniqueOverOs] = useState<string[]>([]);
+  const [uniqueUnderOs, setUniqueUnderOs] = useState<string[]>([]);
+  const [uniqueFirstHalfs, setUniqueFirstHalfs] = useState<string[]>([]);
+  const [uniqueMatches, setUniqueMatches] = useState<string[]>([]);
+  const [uniqueOneEs, setUniqueOneEs] = useState<string[]>([]);
+  const [uniqueXEs, setUniqueXEs] = useState<string[]>([]);
+  const [uniqueTwoEs, setUniqueTwoEs] = useState<string[]>([]);
+  const [uniqueBtsEs, setUniqueBtsEs] = useState<string[]>([]);
+  const [uniqueBtsNoEs, setUniqueBtsNoEs] = useState<string[]>([]);
+  const [uniqueOverEs, setUniqueOverEs] = useState<string[]>([]);
+  const [uniqueUnderEs, setUniqueUnderEs] = useState<string[]>([]);
+  const [uniqueTeams, setUniqueTeams] = useState<string[]>([]);
+  const [allMatchesCache, setAllMatchesCache] = useState<Match[]>([]);
+  const [allStatisticsCache, setAllStatisticsCache] = useState<Statistics | null>(null);
+
+  const topBlockRef = useRef<HTMLDivElement>(null);
+  const totalOptions = ['Over 1.5', 'Under 1.5', 'Over 2.5', 'Under 2.5', 'Over 3.5', 'Under 3.5'];
+
+  const getBaseLeagueName = (fullLeagueName: string): string => {
+    if (!fullLeagueName) return '';
+    return fullLeagueName.split(' - ')[0].trim();
+  };
+
+  const fetchMatches = async (useCache: boolean = false) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Если используем кэш и он есть
+      if (useCache && allMatchesCache.length > 0 && allStatisticsCache) {
+        setMatches(allMatchesCache);
+        setStatistics(allStatisticsCache);
+        setLoading(false);
+        return;
+      }
+
+      const params = new URLSearchParams();
+      if (selectedLeagues.length > 0) params.append('league_id', selectedLeagues[0]);
+      if (selectedTeam.length > 0) {
+        params.append('team', selectedTeam[0]);
+        const locations = [];
+        if (showHome) locations.push('home');
+        if (showAway) locations.push('away');
+        if (locations.length > 0) params.append('location', locations.join(','));
+      }
+      if (selectedOneOs.length > 0) params.append('one_os', selectedOneOs.join(','));
+      if (selectedXOs.length > 0) params.append('x_os', selectedXOs.join(','));
+      if (selectedTwoOs.length > 0) params.append('two_os', selectedTwoOs.join(','));
+      if (selectedBtsOs.length > 0) params.append('bts_os', selectedBtsOs.join(','));
+      if (selectedBtsNoOs.length > 0) params.append('bts_no_os', selectedBtsNoOs.join(','));
+      if (selectedOverOs.length > 0) params.append('over_os', selectedOverOs.join(','));
+      if (selectedUnderOs.length > 0) params.append('under_os', selectedUnderOs.join(','));
+      if (selectedFirstHalfs.length > 0) params.append('first_halfs', selectedFirstHalfs.join(','));
+      if (selectedMatches.length > 0) params.append('matches', selectedMatches.join(','));
+      if (selectedOneEs.length > 0) params.append('one_es', selectedOneEs.join(','));
+      if (selectedXEs.length > 0) params.append('x_es', selectedXEs.join(','));
+      if (selectedTwoEs.length > 0) params.append('two_es', selectedTwoEs.join(','));
+      if (selectedBtsEs.length > 0) params.append('bts_es', selectedBtsEs.join(','));
+      if (selectedBtsNoEs.length > 0) params.append('bts_no_es', selectedBtsNoEs.join(','));
+      if (selectedOverEs.length > 0) params.append('over_es', selectedOverEs.join(','));
+      if (selectedUnderEs.length > 0) params.append('under_es', selectedUnderEs.join(','));
+      if (selectedBtsResult.length > 0) params.append('bts_result', selectedBtsResult[0]);
+      if (selectedTotalGoals.length > 0) params.append('total_goals', selectedTotalGoals[0]);
+
+      const [matchesResponse, statsResponse, allMatchesResponse] = await Promise.all([
+        axios.get<Match[]>(`http://localhost:8000/api/matches/?${params.toString()}`),
+        axios.get<Statistics>(`http://localhost:8000/api/matches/statistics/?${params.toString()}`),
+        axios.get<Match[]>(`http://localhost:8000/api/matches/`),
+         axios.get<Statistics>(`http://localhost:8000/api/matches/statistics/`)
+      ]);
+
+      setMatches(matchesResponse.data);
+      setStatistics(statsResponse.data);
+
+      // Сохраняем в кэш
+      setAllMatchesCache(allMatchesResponse.data);
+      setAllStatisticsCache(statsResponse.data);
+
+      const leaguesMap = new Map<string, League>();
+      allMatchesResponse.data.forEach(match => {
+        if (match.league_id && match.league) {
+          leaguesMap.set(match.league_id, {
+            id: match.league_id,
+            name: getBaseLeagueName(match.league)
+          });
+        }
+      });
+
+      const sortedLeagues = Array.from(leaguesMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
+      setUniqueLeagues(sortedLeagues);
+
+      const homes = new Set<string>();
+      const aways = new Set<string>();
+      const oneOs = new Set<string>();
+      const xOs = new Set<string>();
+      const twoOs = new Set<string>();
+      const btsOs = new Set<string>();
+      const btsNoOs = new Set<string>();
+      const overOs = new Set<string>();
+      const underOs = new Set<string>();
+      const firstHalfs = new Set<string>();
+      const matchesResults = new Set<string>();
+      const oneEs = new Set<string>();
+      const xEs = new Set<string>();
+      const twoEs = new Set<string>();
+      const btsEs = new Set<string>();
+      const btsNoEs = new Set<string>();
+      const overEs = new Set<string>();
+      const underEs = new Set<string>();
+
+      allMatchesResponse.data.forEach(match => {
+        homes.add(match.home);
+        aways.add(match.away);
+        oneOs.add(match.one_o.toFixed(2));
+        xOs.add(match.x_o.toFixed(2));
+        twoOs.add(match.two_o.toFixed(2));
+        btsOs.add(match.bts_o.toFixed(2));
+        btsNoOs.add(match.bts_no_o.toFixed(2));
+        overOs.add(match.over_o.toFixed(2));
+        underOs.add(match.under_o.toFixed(2));
+        if (match.first_half) firstHalfs.add(match.first_half);
+        if (match.match) matchesResults.add(match.match);
+        oneEs.add(match.one_e.toFixed(2));
+        xEs.add(match.x_e.toFixed(2));
+        twoEs.add(match.two_e.toFixed(2));
+        btsEs.add(match.bts_e.toFixed(2));
+        btsNoEs.add(match.bts_no_e.toFixed(2));
+        overEs.add(match.over_e.toFixed(2));
+        underEs.add(match.under_e.toFixed(2));
+      });
+
+      setUniqueTeams(Array.from(new Set([...Array.from(homes), ...Array.from(aways)])).sort());
+      setUniqueOneOs(Array.from(oneOs).sort());
+      setUniqueXOs(Array.from(xOs).sort());
+      setUniqueTwoOs(Array.from(twoOs).sort());
+      setUniqueBtsOs(Array.from(btsOs).sort());
+      setUniqueBtsNoOs(Array.from(btsNoOs).sort());
+      setUniqueOverOs(Array.from(overOs).sort());
+      setUniqueUnderOs(Array.from(underOs).sort());
+      setUniqueFirstHalfs(Array.from(firstHalfs).sort());
+      setUniqueMatches(Array.from(matchesResults).sort());
+      setUniqueOneEs(Array.from(oneEs).sort());
+      setUniqueXEs(Array.from(xEs).sort());
+      setUniqueTwoEs(Array.from(twoEs).sort());
+      setUniqueBtsEs(Array.from(btsEs).sort());
+      setUniqueBtsNoEs(Array.from(btsNoEs).sort());
+      setUniqueOverEs(Array.from(overEs).sort());
+      setUniqueUnderEs(Array.from(underEs).sort());
+
+    } catch (err) {
+      setError('Failed to load data. Please try again later.');
+      console.error('Error loading data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // useEffect(() => {
+    
+  //   fetchMatches();
+  // }, [
+  //   selectedLeagues, selectedTeam, showHome, showAway,
+  //   selectedOneOs, selectedXOs, selectedTwoOs, selectedBtsOs, selectedBtsNoOs,
+  //   selectedOverOs, selectedUnderOs, selectedFirstHalfs, selectedMatches,
+  //   selectedOneEs, selectedXEs, selectedTwoEs, selectedBtsEs, selectedBtsNoEs,
+  //   selectedOverEs, selectedUnderEs, selectedBtsResult, selectedTotalGoals
+  // ]);
+
+  useEffect(() => {
+    const hasActiveFilters = 
+      selectedLeagues.length > 0 || selectedTeam.length > 0 || showHome || showAway ||
+      selectedOneOs.length > 0 || selectedXOs.length > 0 || selectedTwoOs.length > 0 ||
+      selectedBtsOs.length > 0 || selectedBtsNoOs.length > 0 || selectedOverOs.length > 0 ||
+      selectedUnderOs.length > 0 || selectedFirstHalfs.length > 0 || selectedMatches.length > 0 ||
+      selectedOneEs.length > 0 || selectedXEs.length > 0 || selectedTwoEs.length > 0 ||
+      selectedBtsEs.length > 0 || selectedBtsNoEs.length > 0 || selectedOverEs.length > 0 ||
+      selectedUnderEs.length > 0 || selectedBtsResult.length > 0 || selectedTotalGoals.length > 0;
+
+    fetchMatches(!hasActiveFilters);
+  }, [
+    selectedLeagues, selectedTeam, showHome, showAway,
+    selectedOneOs, selectedXOs, selectedTwoOs, selectedBtsOs, selectedBtsNoOs,
+    selectedOverOs, selectedUnderOs, selectedFirstHalfs, selectedMatches,
+    selectedOneEs, selectedXEs, selectedTwoEs, selectedBtsEs, selectedBtsNoEs,
+    selectedOverEs, selectedUnderEs, selectedBtsResult, selectedTotalGoals
+  ]);
+
+  const handleSelectChange = (
+    e: React.ChangeEvent<HTMLSelectElement>,
+    setter: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    const value = e.target.value;
+    if (value === '') {
+      setter([]);
+    } else {
+      setter([value]);
+    }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    if (term.length > 1) {
+      const filteredTeams = uniqueTeams.filter(team =>
+        team.toLowerCase().includes(term.toLowerCase())
+      );
+      setSearchResults(filteredTeams);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const handleTeamSelect = (teamName: string) => {
+    setSelectedTeam([teamName]);
+    setSearchTerm(teamName);
+    setSearchResults([]);
+  };
+
+  const handleResetFilters = () => {
+    setSelectedLeagues([]);
+    setSelectedTeam([]);
+    setSearchTerm('');
+    setSearchResults([]);
+    setSelectedOneOs([]);
+    setSelectedXOs([]);
+    setSelectedTwoOs([]);
+    setSelectedBtsOs([]);
+    setSelectedBtsNoOs([]);
+    setSelectedOverOs([]);
+    setSelectedUnderOs([]);
+    setSelectedFirstHalfs([]);
+    setSelectedMatches([]);
+    setSelectedOneEs([]);
+    setSelectedXEs([]);
+    setSelectedTwoEs([]);
+    setSelectedBtsEs([]);
+    setSelectedBtsNoEs([]);
+    setSelectedOverEs([]);
+    setSelectedUnderEs([]);
+    setSelectedBtsResult([]);
+    setSelectedTotalGoals([]);
+    setShowHome(false);
+    setShowAway(false);
+
+    // Восстановление из кэша
+    if (allMatchesCache.length > 0 && allStatisticsCache) {
+      setMatches(allMatchesCache);
+      setStatistics(allStatisticsCache); // ← ВОТ ЭТОЙ СТРОКИ НЕ БЫЛО!
+    } else {
+      fetchMatches(true);
+    }
+
+    // Всегда делаем запрос для свежей статистики
+    fetchStatisticsForAllMatches();
+  };
+
+  const fetchStatisticsForAllMatches = async () => {
+    try {
+      const statsResponse = await axios.get<Statistics>(
+        'http://localhost:8000/api/matches/statistics/'
+      );
+      setStatistics(statsResponse.data);
+    } catch (err) {
+      console.error('Error loading statistics:', err);
+    }
+  };
+
+  const formatRoi = (roi: number | null) => {
+    if (roi === null || isNaN(roi)) {
+      return '';
+    }
+    const sign = roi >= 0 ? '+' : '';
+    const color = roi >= 0 ? 'green' : 'red';
+    return <span style={{ color }}>{`${sign}${roi.toFixed(2)}`}</span>;
+  };
+
+  const getFullLeagueName = (league: string): string => {
+    if (!league) return '';
+    return league.split(' - ')[0].trim();
+  };
+
+  const filteredMatches = useMemo(() => {
+    if (!selectedLeagues.length) return matches;
+    return matches.filter(match => selectedLeagues.includes(match.league_id));
+  }, [matches, selectedLeagues]);
+
+  // Загрузка данных при фильрации без черного экрана
+  <tbody>
+    {loading ? (
+      <tr>
+        <td colSpan={22} style={{ textAlign: 'center', padding: '20px' }}>
+          Loading data...
+        </td>
+      </tr>
+    ) : filteredMatches.length === 0 ? (
+      <tr>
+        <td colSpan={22} style={{ textAlign: 'center', padding: '20px' }}>
+          No matches found or access restricted.
+        </td>
+      </tr>
+    ) : (
+      filteredMatches.map(match => (
+        <tr key={match.id}>
+          {/* Ячейки с данными */}
+        </tr>
+      ))
+    )}
+  </tbody>
+
+  if (error) {
+    return <div style={{ color: 'red' }}>{error}</div>;
+  }
+
+  return (
+    <div style={{ padding: '10px' }}>
+      <div ref={topBlockRef} style={topBlockStyle}>
+        {statistics && (
+          <div style={cardContainerStyle}>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.total_matches}</div>
+              <div style={cardTitleStyle}>Total Matches</div>
+              <div style={cardRoiStyle}></div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.home_wins_count}</div>
+              <div style={cardTitleStyle}>Home Wins</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_home)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.draws_count}</div>
+              <div style={cardTitleStyle}>Draws</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_draw)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.away_wins_count}</div>
+              <div style={cardTitleStyle}>Away Wins</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_away)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.bts_yes_count}</div>
+              <div style={cardTitleStyle}>BTS Yes</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_bts_yes)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.bts_no_count}</div>
+              <div style={cardTitleStyle}>BTS No</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_bts_no)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.over_count}</div>
+              <div style={cardTitleStyle}>Over</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_over)}</div>
+            </div>
+            <div style={cardStyle}>
+              <div style={cardCountStyle}>{statistics.under_count}</div>
+              <div style={cardTitleStyle}>Under</div>
+              <div style={cardRoiStyle}>{formatRoi(statistics.roi_under)}</div>
+            </div>
+          </div>
+        )}
+
+        <div style={filtersContainerStyle}>
+          <div style={filtersRowStyle}>
+            <div style={{ ...filterItemStyle, minWidth: '110px' }}>
+              <label htmlFor="selectLeagueFilter" style={labelStyle}>League</label>
+              <select
+                id="selectLeagueFilter"
+                value={selectedLeagues.length > 0 ? selectedLeagues[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedLeagues)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueLeagues.map(league => (
+                  <option key={league.id} value={league.id}>{league.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div style={{ ...filterItemStyle, minWidth: '110px', position: 'relative' }}>
+              <label htmlFor="teamSearchFilter" style={labelStyle}>Team</label>
+              <input
+                id="teamSearchFilter"
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="Search..."
+                style={inputStyle}
+              />
+              {searchResults.length > 0 && searchTerm.length > 1 && (
+                <ul style={searchResultsStyle}>
+                  {searchResults.map(team => (
+                    <li
+                      key={team}
+                      onClick={() => handleTeamSelect(team)}
+                      style={searchResultItemStyle}
+                    >
+                      {team}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div style={filterItemStyle}>
+              <div style={{ display: 'flex', gap: '5px', marginTop: '16px' }}>
+                <label style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    checked={showHome}
+                    onChange={() => setShowHome(!showHome)}
+                    style={{ marginRight: '3px' }}
+                  />
+                  Home
+                </label>
+                <label style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    checked={showAway}
+                    onChange={() => setShowAway(!showAway)}
+                    style={{ marginRight: '3px' }}
+                  />
+                  Away
+                </label>
+              </div>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectOneOFilter" style={labelStyle}>1(o)</label>
+              <select
+                id="selectOneOFilter"
+                value={selectedOneOs.length > 0 ? selectedOneOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedOneOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueOneOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectOneEFilter" style={labelStyle}>1(e)</label>
+              <select
+                id="selectOneEFilter"
+                value={selectedOneEs.length > 0 ? selectedOneEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedOneEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueOneEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectXoFilter" style={labelStyle}>X(o)</label>
+              <select
+                id="selectXoFilter"
+                value={selectedXOs.length > 0 ? selectedXOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedXOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueXOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectXeFilter" style={labelStyle}>X(e)</label>
+              <select
+                id="selectXeFilter"
+                value={selectedXEs.length > 0 ? selectedXEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedXEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueXEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectTwoOFilter" style={labelStyle}>2(o)</label>
+              <select
+                id="selectTwoOFilter"
+                value={selectedTwoOs.length > 0 ? selectedTwoOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedTwoOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueTwoOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectTwoEFilter" style={labelStyle}>2(e)</label>
+              <select
+                id="selectTwoEFilter"
+                value={selectedTwoEs.length > 0 ? selectedTwoEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedTwoEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueTwoEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectBtsOFilter" style={labelStyle}>BTS(o)</label>
+              <select
+                id="selectBtsOFilter"
+                value={selectedBtsOs.length > 0 ? selectedBtsOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedBtsOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueBtsOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectBtsEFilter" style={labelStyle}>BTS(e)</label>
+              <select
+                id="selectBtsEFilter"
+                value={selectedBtsEs.length > 0 ? selectedBtsEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedBtsEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueBtsEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectBtsNoOFilter" style={labelStyle}>BTS_no(o)</label>
+              <select
+                id="selectBtsNoOFilter"
+                value={selectedBtsNoOs.length > 0 ? selectedBtsNoOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedBtsNoOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueBtsNoOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectBtsNoEFilter" style={labelStyle}>BTS_no(e)</label>
+              <select
+                id="selectBtsNoEFilter"
+                value={selectedBtsNoEs.length > 0 ? selectedBtsNoEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedBtsNoEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueBtsNoEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectOverOFilter" style={labelStyle}>Over(o)</label>
+              <select
+                id="selectOverOFilter"
+                value={selectedOverOs.length > 0 ? selectedOverOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedOverOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueOverOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectOverEFilter" style={labelStyle}>Over(e)</label>
+              <select
+                id="selectOverEFilter"
+                value={selectedOverEs.length > 0 ? selectedOverEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedOverEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueOverEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectUnderOFilter" style={labelStyle}>Under(o)</label>
+              <select
+                id="selectUnderOFilter"
+                value={selectedUnderOs.length > 0 ? selectedUnderOs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedUnderOs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueUnderOs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectUnderEFilter" style={labelStyle}>Under(e)</label>
+              <select
+                id="selectUnderEFilter"
+                value={selectedUnderEs.length > 0 ? selectedUnderEs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedUnderEs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueUnderEs.map(odd => (
+                  <option key={odd} value={odd}>{odd}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectFirstHalfFilter" style={labelStyle}>1H</label>
+              <select
+                id="selectFirstHalfFilter"
+                value={selectedFirstHalfs.length > 0 ? selectedFirstHalfs[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedFirstHalfs)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueFirstHalfs.map(score => (
+                  <option key={score} value={score}>{score}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectMatchFilter" style={labelStyle}>FT</label>
+              <select
+                id="selectMatchFilter"
+                value={selectedMatches.length > 0 ? selectedMatches[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedMatches)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {uniqueMatches.map(score => (
+                  <option key={score} value={score}>{score}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectBtsResultFilter" style={labelStyle}>BTS</label>
+              <select
+                id="selectBtsResultFilter"
+                value={selectedBtsResult.length > 0 ? selectedBtsResult[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedBtsResult)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+
+            <div style={filterItemStyle}>
+              <label htmlFor="selectTotalGoalsFilter" style={labelStyle}>Total</label>
+              <select
+                id="selectTotalGoalsFilter"
+                value={selectedTotalGoals.length > 0 ? selectedTotalGoals[0] : ''}
+                onChange={(e) => handleSelectChange(e, setSelectedTotalGoals)}
+                style={selectStyle}
+              >
+                <option value=""></option>
+                {totalOptions.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ ...filterItemStyle, minWidth: '80px', marginTop: '16px' }}>
+              <button 
+                onClick={handleResetFilters} 
+                style={resetButtonStyle}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style={tableContainerStyle}>
+        <table style={tableStyle}>
+          <thead>
+            <tr style={stickyHeaderRowStyle}>
+              <th style={{  minWidth: '120px' }}>Date</th>
+              <th style={{  minWidth: '90px' }}>Home</th>
+              <th style={{  minWidth: '90px' }}>Away</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>1(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>X(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>2(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>BTS(e)</th> 
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>B_no(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>B_no(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>O_2.5(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>O_2.5(e)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>U_2.5(o)</th>
+              <th style={{ ...verticalHeaderStyle, ...fixedWidthColumnStyle }}>U_2.5(e)</th>
+              <th style={{  ...fixedWidthColumnStyle }}>1H</th>
+              <th style={{  ...fixedWidthColumnStyle }}>FT</th>
+              <th>League</th>
+            </tr>
+          </thead>
+          <tbody>
+              {matches.map(match => {
+                const matchDate = new Date(match.date);
+                // const formattedDate = matchDate.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                // const formattedTime = matchDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                const day = matchDate.getDate().toString().padStart(2, '0');
+                const month = (matchDate.getMonth() + 1).toString().padStart(2, '0');
+                const year = matchDate.getFullYear();
+                const hours = matchDate.getHours().toString().padStart(2, '0');
+                const minutes = matchDate.getMinutes().toString().padStart(2, '0');
+
+                const formattedDateTime = `${day}.${month}.${year}  ${hours}:${minutes}`;
+                return (
+                  <tr key={match.id}>
+                    <td style={cellStyle}>{`${formattedDateTime}`}</td>
+                    <td style={cellStyle}>{match.home}</td>
+                    <td style={cellStyle}>{match.away}</td>
+                    <td style={cellStyle}>{match.one_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.one_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.x_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.x_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.two_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.two_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.bts_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.bts_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.bts_no_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.bts_no_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.over_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.over_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.under_o.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.under_e.toFixed(2)}</td>
+                    <td style={cellStyle}>{match.first_half || '-'}</td>
+                    <td style={cellStyle}>{match.match || '-'}</td>
+                    <td style={cellStyle_2} title={match.league}>{getFullLeagueName(match.league)}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default MatchList;
+
+=====================================================================================================
+
+// MatchList.styles.ts
+import type { CSSProperties } from 'react';
+
+export const cellStyle: CSSProperties = {
+  padding: '4px 6px',
+  border: '1px solid #444',
+  textAlign: 'center',
+  whiteSpace: 'nowrap',
+  boxSizing: 'border-box',
+};
+
+export const cellStyle_2: CSSProperties = {
+  padding: '4px 6px',
+  border: '1px solid #444',
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  maxWidth: 150,
+  boxSizing: 'border-box',
+  cursor: 'default',
+};
+
+export const verticalHeaderStyle: CSSProperties = {
+  writingMode: 'vertical-lr',
+  textOrientation: 'mixed',
+  transform: 'rotate(180deg)',
+  whiteSpace: 'nowrap',
+  padding: '4px 6px',
+  textAlign: 'center',
+  verticalAlign: 'middle',
+  minWidth: '30px',
+  boxSizing: 'border-box',
+  border: '1px solid #444',
+};
+
+export const fixedWidthColumnStyle: CSSProperties = {
+  minWidth: '45px',
+};
+
+export const cardContainerStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+  gap: '10px',
+  marginBottom: '15px',
+  backgroundColor: '#333',
+  borderRadius: '8px',
+  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+};
+
+export const cardStyle: CSSProperties = {
+  backgroundColor: '#444',
+  padding: '10px',
+  borderRadius: '8px',
+  textAlign: 'center',
+  color: 'white',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'space-between',
+  minHeight: '80px',
+};
+
+export const cardCountStyle: CSSProperties = {
+  fontSize: '1.5em',
+  fontWeight: 'bold',
+  marginBottom: '3px',
+};
+
+export const cardTitleStyle: CSSProperties = {
+  fontSize: '0.8em',
+  color: '#bbb',
+  marginBottom: '3px',
+};
+
+export const cardRoiStyle: CSSProperties = {
+  fontSize: '0.7em',
+  fontWeight: 'bold',
+};
+
+export const topBlockStyle: CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 100,
+  backgroundColor: '#282c34',
+  boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+};
+
+export const searchResultsStyle: CSSProperties = {
+  position: 'absolute',
+  top: '100%',
+  left: 0,
+  right: 0,
+  backgroundColor: '#333',
+  border: '1px solid #555',
+  borderRadius: '3px',
+  maxHeight: '200px',
+  overflowY: 'auto',
+  zIndex: 101,
+  listStyle: 'none',
+  padding: 0,
+  margin: 0,
+};
+
+export const searchResultItemStyle: CSSProperties = {
+  padding: '8px 10px',
+  cursor: 'pointer',
+  borderBottom: '1px solid #444',
+};
+
+export const tableStyle: CSSProperties = {
+  borderCollapse: 'collapse',
+  width: '100%',
+  fontSize: '0.85em',
+  margin: '0 auto',
+};
+
+export const filtersContainerStyle: CSSProperties = {
+  // marginBottom: '15px',
+  padding: '8px',
+  border: '1px solid #ccc',
+  borderRadius: '4px',
+  backgroundColor: '#2a2a2a',
+};
+
+export const filtersRowStyle: CSSProperties = {
+  display: 'flex',
+  gap: '6px',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+};
+
+export const filterItemStyle: CSSProperties = {
+  minWidth: '90px',
+  flex: '0 1 auto',
+};
+
+export const selectStyle: CSSProperties = {
+  padding: '3px 5px',
+  border: '1px solid #555',
+  borderRadius: '3px',
+  fontSize: '0.8em',
+  backgroundColor: '#333',
+  color: 'white',
+  height: '26px',
+  width: '100%',
+};
+
+export const inputStyle: CSSProperties = {
+  padding: '3px 5px',
+  border: '1px solid #555',
+  borderRadius: '3px',
+  fontSize: '0.8em',
+  backgroundColor: '#333',
+  color: 'white',
+  height: '26px',
+  width: '100%',
+};
+
+export const labelStyle: CSSProperties = {
+  fontSize: '0.75em',
+  color: '#bbb',
+  marginBottom: '2px',
+  display: 'block',
+};
+
+export const checkboxLabelStyle: CSSProperties = {
+  fontSize: '0.75em',
+  color: '#bbb',
+  marginRight: '8px',
+  marginLeft: '14px',
+};
+
+export const resetButtonStyle: CSSProperties = {
+  padding: '4px 8px',
+  backgroundColor: '#007bff',
+  color: 'white',
+  border: 'none',
+  borderRadius: '3px',
+  cursor: 'pointer',
+  fontSize: '0.8em',
+  height: '26px',
+};
+
+export const stickyHeaderRowStyle: CSSProperties = {
+  position: 'sticky',
+  top: '0',
+  zIndex: 90,
+  backgroundColor: '#282c34',
+};
+
+export const tableContainerStyle: CSSProperties = {
+  overflowX: 'hidden', // Убираем горизонтальный скролл'auto',
+  overflowY: 'auto',
+  maxHeight: 'calc(100vh - 300px)',
+  marginTop: '0', // Убедитесь что нет отступов
+  padding: '0', // Уберите внутренние отступы
+  backgroundColor: '#282c34' // Фон контейнера должен совпадать
+};
+
+================================================================================
+
+# matches/views.py
+from rest_framework import viewsets
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from .models import MainLeague
+from .serializers import MainLeagueSerializer
+from django.db.models import Q, F, Value, IntegerField, DecimalField
+from django.db.models.functions import Cast, Substr, StrIndex, Replace
+from django.db.models import Case, When, BooleanField
+import time # <-- Добавляем импорт time
+
+print("Поля модели MainLeague:", [f.name for f in MainLeague._meta.get_fields()])
+
+class MatchViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = MainLeague.objects.all().order_by('-date')
+    serializer_class = MainLeagueSerializer
+
+    def get_queryset(self):
+        start_time = time.time() # <-- Начало измерения времени для get_queryset
+        queryset = super().get_queryset()
+
+        # 1. Фильтр по league_id (основной)
+        league_id = self.request.query_params.get('league_id')
+        if league_id:
+            try:
+                queryset = queryset.filter(league_id=int(league_id))  # Явное преобразование в число
+            except (ValueError, TypeError):
+                # Если league_id строка (например, "premier-league")
+                queryset = queryset.filter(league_id=league_id)
+        
+        # 2. Остальные фильтры (оставить без изменений)
+        selected_leagues = self.request.query_params.get('leagues')
+        if selected_leagues:
+            leagues_list = [l.strip() for l in selected_leagues.split(',')]
+            q_objects = Q()
+            for league_name in leagues_list:
+                q_objects |= Q(league__startswith=league_name)
+            queryset = queryset.filter(q_objects)
+
+        selected_team = self.request.query_params.get('team')
+        location_filter = self.request.query_params.get('location')  # например, 'home', 'away' или 'home,away'
+
+        if selected_team:
+            if location_filter:
+                locations = location_filter.lower().split(',')
+                filters = Q()
+                if 'home' in locations:
+                    filters |= Q(home__iexact=selected_team)
+                if 'away' in locations:
+                    filters |= Q(away__iexact=selected_team)
+                queryset = queryset.filter(filters)
+            else:
+                # Если параметр location не передан — показываем все матчи с командой (и дома, и в гостях)
+                queryset = queryset.filter(Q(home__iexact=selected_team) | Q(away__iexact=selected_team))
+
+
+        # --- Фильтры для коэффициентов (o - odds) ---
+        selected_one_os = self.request.query_params.get('one_os')
+        if selected_one_os:
+            one_os_list = [float(o.strip()) for o in selected_one_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if one_os_list:
+                queryset = queryset.filter(one_o__in=one_os_list)
+
+        selected_x_os = self.request.query_params.get('x_os')
+        if selected_x_os:
+            x_os_list = [float(o.strip()) for o in selected_x_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if x_os_list:
+                queryset = queryset.filter(x_o__in=x_os_list)
+
+        selected_two_os = self.request.query_params.get('two_os')
+        if selected_two_os:
+            two_os_list = [float(o.strip()) for o in selected_two_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if two_os_list:
+                queryset = queryset.filter(two_o__in=two_os_list)
+
+        selected_bts_os = self.request.query_params.get('bts_os')
+        if selected_bts_os:
+            bts_os_list = [float(o.strip()) for o in selected_bts_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if bts_os_list:
+                queryset = queryset.filter(bts_o__in=bts_os_list)
+
+        selected_bts_no_os = self.request.query_params.get('bts_no_os')
+        if selected_bts_no_os:
+            bts_no_os_list = [float(o.strip()) for o in selected_bts_no_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if bts_no_os_list:
+                queryset = queryset.filter(bts_no_o__in=bts_no_os_list)
+
+        selected_over_os = self.request.query_params.get('over_os')
+        if selected_over_os:
+            over_os_list = [float(o.strip()) for o in selected_over_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if over_os_list:
+                queryset = queryset.filter(over_o__in=over_os_list)
+
+        selected_under_os = self.request.query_params.get('under_os')
+        if selected_under_os:
+            under_os_list = [float(o.strip()) for o in selected_under_os.split(',') if o.strip().replace('.', '', 1).isdigit()]
+            if under_os_list:
+                queryset = queryset.filter(under_o__in=under_os_list)
+
+        # --- Фильтры для ожидаемых значений (e - expected) ---
+        selected_one_es = self.request.query_params.get('one_es')
+        if selected_one_es:
+            one_es_list = [float(e.strip()) for e in selected_one_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if one_es_list:
+                queryset = queryset.filter(one_e__in=one_es_list)
+
+        selected_x_es = self.request.query_params.get('x_es')
+        if selected_x_es:
+            x_es_list = [float(e.strip()) for e in selected_x_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if x_es_list:
+                queryset = queryset.filter(x_e__in=x_es_list)
+
+        selected_two_es = self.request.query_params.get('two_es')
+        if selected_two_es:
+            two_es_list = [float(e.strip()) for e in selected_two_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if two_es_list:
+                queryset = queryset.filter(two_e__in=two_es_list)
+
+        selected_bts_es = self.request.query_params.get('bts_es')
+        if selected_bts_es:
+            bts_es_list = [float(e.strip()) for e in selected_bts_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if bts_es_list:
+                queryset = queryset.filter(bts_e__in=bts_es_list)
+
+        selected_bts_no_es = self.request.query_params.get('bts_no_es')
+        if selected_bts_no_es:
+            bts_no_es_list = [float(e.strip()) for e in selected_bts_no_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if bts_no_es_list:
+                queryset = queryset.filter(bts_no_e__in=bts_no_es_list)
+
+        selected_over_es = self.request.query_params.get('over_es')
+        if selected_over_es:
+            over_es_list = [float(e.strip()) for e in selected_over_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if over_es_list:
+                queryset = queryset.filter(over_e__in=over_es_list)
+
+        selected_under_es = self.request.query_params.get('under_es')
+        if selected_under_es:
+            under_es_list = [float(e.strip()) for e in selected_under_es.split(',') if e.strip().replace('.', '', 1).isdigit()]
+            if under_es_list:
+                queryset = queryset.filter(under_e__in=under_es_list)
+
+        # --- Фильтры для счетов ---
+        selected_first_halfs = self.request.query_params.get('first_halfs')
+        if selected_first_halfs:
+            first_halfs_list = [s.strip() for s in selected_first_halfs.split(',')]
+            queryset = queryset.filter(first_half__in=first_halfs_list)
+
+        selected_matches = self.request.query_params.get('matches')
+        if selected_matches:
+            matches_list = [s.strip() for s in selected_matches.split(',')]
+            queryset = queryset.filter(match__in=matches_list)
+
+
+        queryset = queryset.filter(match__regex=r'^\d+\s*-\s*\d+$')
+
+        dash_index = StrIndex('match', Value(' - '))
+
+        queryset = queryset.annotate(
+            home_score_str=Substr('match', 1, dash_index - 1),
+            away_score_str=Substr('match', dash_index + 3),
+        ).annotate(
+            home_score_int=Cast('home_score_str', IntegerField()),
+            away_score_int=Cast('away_score_str', IntegerField()),
+        )
+
+        bts_result_filter = self.request.query_params.get('bts_result')
+        if bts_result_filter:
+            bts_result_filter_lower = bts_result_filter.lower()
+            if bts_result_filter_lower == 'yes':
+                queryset = queryset.filter(home_score_int__gt=0, away_score_int__gt=0)
+            elif bts_result_filter_lower == 'no':
+                queryset = queryset.filter(Q(home_score_int=0) | Q(away_score_int=0))
+
+        total_goals_filter = self.request.query_params.get('total_goals')
+        if total_goals_filter:
+            queryset = queryset.annotate(
+                total_goals_calculated=F('home_score_int') + F('away_score_int')
+            )
+            try:
+                value_str = total_goals_filter.replace('Over ', '').replace('Under ', '')
+                value = float(value_str)
+                if 'Over' in total_goals_filter:
+                    queryset = queryset.filter(total_goals_calculated__gt=value)
+                elif 'Under' in total_goals_filter:
+                    queryset = queryset.filter(total_goals_calculated__lt=value)
+            except (ValueError, TypeError):
+                pass
+        end_time = time.time() # <-- Конец измерения времени для get_queryset
+        print(f"get_queryset execution time: {end_time - start_time:.4f} seconds") # <-- Вывод в консоль
+                
+        return queryset
+
+
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """
+        Возвращает агрегированную статистику и ROI для отфильтрованных матчей.
+        """
+        filtered_matches = self.get_queryset()
+
+        total_matches = filtered_matches.count()
+
+        stats = {
+            'total_matches': total_matches,
+            'home_wins_count': 0,
+            'draws_count': 0,
+            'away_wins_count': 0,
+            'bts_yes_count': 0,
+            'bts_no_count': 0,
+            'over_count': 0,
+            'under_count': 0,
+            'roi_home': 0.0,
+            'roi_draw': 0.0,
+            'roi_away': 0.0,
+            'roi_bts_yes': 0.0,
+            'roi_bts_no': 0.0,
+            'roi_over': 0.0,
+            'roi_under': 0.0,
+        }
+
+        total_stake_home = 0
+        total_profit_home = 0
+        total_stake_draw = 0
+        total_profit_draw = 0
+        total_stake_away = 0
+        total_profit_away = 0
+        total_stake_bts_yes = 0
+        total_profit_bts_yes = 0
+        total_stake_bts_no = 0
+        total_profit_bts_no = 0
+        total_stake_over = 0
+        total_profit_over = 0
+        total_stake_under = 0
+        total_profit_under = 0
+
+        for match in filtered_matches:
+            home_score = None
+            away_score = None
+            total_goals = None
+
+            if match.match and ' - ' in match.match:
+                try:
+                    scores = match.match.split(' - ')
+                    home_score = int(scores[0].strip())
+                    away_score = int(scores[1].strip())
+                    total_goals = home_score + away_score
+                except ValueError:
+                    home_score = None
+                    away_score = None
+                    total_goals = None
+
+            if home_score is not None and away_score is not None:
+                # Победа Дома (P1)
+                if match.one_e and match.one_e > 0:
+                    total_stake_home += 1
+                    if home_score > away_score:
+                        stats['home_wins_count'] += 1
+                        total_profit_home += (match.one_e - 1)
+                    else:
+                        total_profit_home -= 1
+
+                # Ничья (X)
+                if match.x_e and match.x_e > 0:
+                    total_stake_draw += 1
+                    if home_score == away_score:
+                        stats['draws_count'] += 1
+                        total_profit_draw += (match.x_e - 1)
+                    else:
+                        total_profit_draw -= 1
+
+                # Победа В гостях (P2)
+                if match.two_e and match.two_e > 0:
+                    total_stake_away += 1
+                    if home_score < away_score:
+                        stats['away_wins_count'] += 1
+                        total_profit_away += (match.two_e - 1)
+                    else:
+                        total_profit_away -= 1
+
+                # Обе забьют (Да/Нет)
+                bts_result = (home_score > 0 and away_score > 0)
+
+                if match.bts_e and match.bts_e > 0:
+                    total_stake_bts_yes += 1
+                    if bts_result:
+                        stats['bts_yes_count'] += 1
+                        total_profit_bts_yes += (match.bts_e - 1)
+                    else:
+                        total_profit_bts_yes -= 1
+                    
+                if match.bts_no_e and match.bts_no_e > 0:
+                    total_stake_bts_no += 1
+                    if not bts_result:
+                        stats['bts_no_count'] += 1
+                        total_profit_bts_no += (match.bts_no_e - 1)
+                    else:
+                        total_profit_bts_no -= 1
+
+                # Тотал (Больше/Меньше)
+                if total_goals is not None:
+                    if match.over_e and match.over_e > 0:
+                        total_stake_over += 1
+                        if total_goals > 2.5:
+                            stats['over_count'] += 1
+                            total_profit_over += (match.over_e - 1)
+                        else:
+                            total_profit_over -= 1
+                    
+                    if match.under_e and match.under_e > 0:
+                        total_stake_under += 1
+                        if total_goals < 2.5:
+                            stats['under_count'] += 1
+                            total_profit_under += (match.under_e - 1)
+                        else:
+                            total_profit_under -= 1
+            
+        # Расчет ROI (только если total_stake > 0, чтобы избежать деления на ноль)
+        if total_stake_home > 0:
+            stats['roi_home'] = total_profit_home 
+        if total_stake_draw > 0:
+            stats['roi_draw'] = total_profit_draw 
+        if total_stake_away > 0:
+            stats['roi_away'] = total_profit_away 
+        if total_stake_bts_yes > 0:
+            stats['roi_bts_yes'] = total_profit_bts_yes 
+        if total_stake_bts_no > 0:
+            stats['roi_bts_no'] = total_profit_bts_no 
+        if total_stake_over > 0:
+            stats['roi_over'] = total_profit_over 
+        if total_stake_under > 0:
+            stats['roi_under'] = total_profit_under 
+
+        return Response(stats)
+
+=========================================================================================
+
+from django.db import models
+
+class MainLeague(models.Model):
+    date = models.DateTimeField()  # Дата
+    home = models.CharField(max_length=100)  # Команда дома
+    away = models.CharField(max_length=100)  # Команда в гостях
+    one_o = models.FloatField()  # Котировка 1(o)
+    one_e = models.FloatField()  # Котировка 1(e)
+    x_o = models.FloatField()  # Котировка X(o)
+    x_e = models.FloatField()  # Котировка X(e)
+    two_o = models.FloatField()  # Котировка 2(o)
+    two_e = models.FloatField()  # Котировка 2(e)
+    bts_o = models.FloatField()  # Котировка BTS(o)
+    bts_e = models.FloatField()  # Котировка BTS(e)
+    bts_no_o = models.FloatField()  # Котировка BTS_no(o)
+    bts_no_e = models.FloatField()  # Котировка BTS_no(e)
+    over_o = models.FloatField()  # Котировка Over(o)
+    over_e = models.FloatField()  # Котировка Over(e)
+    under_o = models.FloatField()  # Котировка Under(o)
+    under_e = models.FloatField()  # Котировка Under(e)
+    first_half = models.CharField(max_length=50, null=True)  # Первый тайм
+    match = models.CharField(max_length=50, null=True)  # Матч
+    goals = models.CharField(max_length=50, null=True)  # Голы
+    league = models.CharField(max_length=50, null=True)  # Лига
+    link = models.URLField(max_length=255, null=True)  # Ссылка
+    notes = models.TextField(null=True)  # Заметки
+    league_id = models.IntegerField(default=0) # id лиги
+
+    class Meta:
+        db_table = 'new_main_league'  # Указываем имя существующей таблицы в БД
+        managed = False  # Запрещаем Django управлять жизненным циклом таблицы
+
+    def __str__(self):
+        return f"{self.home} vs {self.away} on {self.date}"  # Читаемое представление
+
+    
