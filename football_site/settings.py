@@ -27,7 +27,12 @@ SECRET_KEY = 'django-insecure-80m5$meik8u*9z=r=kr0t8jb433qf1sjzx2wl*va+qpei&$16a
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'api.oddsvalue.pro',    # ваш бэкенд
+    'oddsvalue.pro',        # ваш фронтенд
+    'localhost',
+    '127.0.0.1',
+]
 
 
 # Application definition
@@ -145,6 +150,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.CustomUser'
 
 CORS_ALLOWED_ORIGINS = [
+    "https://oddsvalue.pro",    # продакшен-фронтенд
     "http://localhost:5173", # Порт, на котором работает ваш React-приложение
     # "http://127.0.0.1:5173", # Если используете 127.0.0.1
 ]
