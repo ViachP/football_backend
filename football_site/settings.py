@@ -156,3 +156,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # Или для всех источников (только для разработки!):
 # CORS_ALLOW_ALL_ORIGINS = True
+# Проверка, что переменная загрузилась
+print("DATABASE_URL:", os.environ.get('DATABASE_URL'))
+print("DATABASES default:", DATABASES['default'])
